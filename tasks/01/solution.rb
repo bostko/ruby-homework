@@ -1,53 +1,53 @@
 class Integer
   def prime?
-    return false if self < 2
-    2.upto(pred).all? { |divisor| remainder(divisor).nonzero? }
+    self > 1 && 2.upto(Math.sqrt(self)).all? { |n| remainder(n).nonzero? }
   end
 
   def prime_factors
-    return [] if self == 1
-    factor = (2..abs).find { |x| remainder(x).zero? }
-    [factor] + (abs / factor).prime_factors
+    prime_factors = 2.upto(abs-1).select { |n| remainder(n).zero? && n.prime? }
+    prime_factors.map { |prime|
+      multiple_prime_factors([], self, prime)
+    }.flatten
   end
 
   def harmonic
-    (1..self).map(&:reciprocal).reduce(:+) if positive?
-  end
-
-  def reciprocal
-    1 / to_r
-  end
-
-  def positive?
-    self > 0
+    1.upto(self).map { |i|
+      1r / i
+    }.inject :+
   end
 
   def digits
-    abs.to_s.chars.map(&:to_i)
+    self.to_s.split('').map &:to_i
+  end
+
+  private
+  def multiple_prime_factors multiple_factors, n, prime
+    if n.remainder(prime).zero?
+      multiple_prime_factors(multiple_factors << prime, n/prime, prime)
+    else
+      multiple_factors
+    end
   end
 end
 
 class Array
   def frequencies
-    each_with_object Hash.new(0) do |value, occurrences|
-      occurrences[value] += 1
+    inject({}) do |frequencies, elem|
+      frequencies[elem] ||= count(elem)
+      frequencies
     end
   end
 
   def average
-    reduce(:+) / length.to_f unless empty?
+    inject(:+) / count.to_f
   end
 
   def drop_every(n)
-    each_slice(n).map { |slice| slice.take(n - 1) }.reduce(:+) or []
+    each_slice(n).map { |slice| slice[0,n-1] }.inject(:+)
   end
 
   def combine_with(other)
-    longer, shorter = self.length > other.length ? [self, other] : [other, self]
-
-    combined = take(shorter.length).zip(other.take(shorter.length)).flatten
-    rest     = longer.drop(shorter.length)
-
-    combined + rest
+    zip(other).compact.flatten
   end
 end
+

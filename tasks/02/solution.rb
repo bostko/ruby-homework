@@ -1,121 +1,101 @@
-class Task
-  attr_reader :status, :description, :priority, :tags
-
-  def initialize(status, description, priority, tags)
-    @status      = status
-    @description = description
-    @priority    = priority
-    @tags        = tags
-  end
-end
-
 class TodoList
   include Enumerable
 
+  attr_reader :tasks
+
   def self.parse(text)
-    parsing = Parsing.new(text) do |status, description, priority, tags|
-      Task.new status, description, priority, tags
+    tasks = text.each_line.map do |line|
+      Task.parse_line line
     end
-
-    TodoList.new parsing.tasks
+    TodoList.new tasks
   end
 
-  def initialize(tasks = [])
+  def initialize tasks
     @tasks = tasks
-  end
-
-  def filter(criteria)
-    TodoList.new @tasks.select { |task| criteria.met_by? task }
-  end
-
-  def adjoin(other)
-    TodoList.new self.tasks | other.tasks
-  end
-
-  def tasks_todo
-    filter(Criteria.status :todo).count
-  end
-
-  def tasks_in_progress
-    filter(Criteria.status :current).count
-  end
-
-  def tasks_completed
-    filter(Criteria.status :done).count
-  end
-
-  def completed?
-    tasks_completed == @tasks.count
   end
 
   def each(&block)
     @tasks.each &block
   end
 
-  protected
-
-  attr_reader :tasks
-end
-
-class TodoList::Parsing
-  attr_reader :tasks
-
-  def initialize(text, &block)
-    @tasks = parse_lines(text).map(&block)
+  def filter criteria
+    TodoList.new @tasks.select { |task| criteria.matches? task }
   end
 
-  private
+  def adjoin(other)
+    TodoList.new @tasks | other.tasks
+  end
 
-  def parse_lines(text)
-    text.lines.map { |line| line.split('|').map(&:strip) }.map do |attributes|
-      format_attributes *attributes
+  def tasks_todo
+    filter(Criteria.status :todo).tasks.length
+  end
+
+  def tasks_in_progress
+    filter(Criteria.status :current).tasks.length
+  end
+
+  def tasks_completed
+    filter(Criteria.status :done).tasks.length
+  end
+
+  def completed?
+    tasks_completed == @tasks.length
+  end
+end
+
+class Task
+  def self.parse_line line
+    attrs = line.split('|').map do |attr|
+      attr.strip
     end
+    Task.new *attrs
   end
 
-  def format_attributes(status, description, priority, tags)
-    [
-     status.downcase.to_sym,
-     description,
-     priority.downcase.to_sym,
-     tags.split(',').map(&:strip)
-    ]
+  attr_reader :status, :description, :priority, :tags
+
+  def initialize status, description, priority, tags
+    @status = status.downcase.to_sym
+    @description = description
+    @priority = priority.downcase.to_sym
+    @tags = tags.split ', '
   end
 end
 
-module Criteria
+class Criteria
   class << self
-    def status(status)
-      Criterion.new { |task| task.status == status }
+    def status status
+      Criteria.new { |task| task.status == status }
     end
 
-    def priority(priority)
-      Criterion.new { |task| task.priority == priority }
+    def tags tags
+      Criteria.new do |task|
+        (tags - task.tags).empty?
+      end
     end
 
-    def tags(tags)
-      Criterion.new { |task| (tags & task.tags).count == tags.count }
+    def priority priority
+      Criteria.new { |task| task.priority == priority }
     end
   end
-end
 
-class Criterion
-  def initialize(&condition)
-    @condition = condition
+  def initialize &block
+    @criterion = block
   end
 
-  def met_by?(task)
-    @condition.call(task)
+  def matches?(task)
+    @criterion.call(task)
   end
 
   def &(other)
-    Criterion.new { |task| self.met_by?(task) and other.met_by?(task) }
+    Criteria.new { |task| self.matches?(task) and other.matches?(task) }
   end
 
   def |(other)
-    Criterion.new { |task| self.met_by?(task) or other.met_by?(task) }
+    Criteria.new { |task| self.matches?(task) or other.matches?(task) }
   end
 
   def !
-    Criterion.new { |task| not met_by?(task) }
+    Criteria.new { |task| not matches?(task) }
   end
 end
+
